@@ -42,11 +42,50 @@ def mass_index(chord_stations):
     return integral(chord_stations) / integral(bm.CHORD_REF)
 
 
-def evaluate_blade(c_chord, c_twist, af, A, k, n_sector=N_SECTOR_FAST):
-    """The 'judge': 12 control-point numbers + site -> AEP and mass index."""
+# ---------- loads and stiffness (all relative to the NREL 5 MW blade) ----------
+U_LOAD, OMEGA_LOAD, PITCH_LOAD = 11.4, 12.1, 0.0     # design load case: rated wind
+
+
+def flap_moments(rotor):
+    """Flapwise bending moment (N*m) at the root and at the 17 blade stations."""
+    loads, _ = rotor.distributedAeroLoads(U_LOAD, OMEGA_LOAD, PITCH_LOAD, 0.0)
+    Np = np.asarray(loads["Np"], dtype=float)
+    r = np.r_[bm.Rhub, bm.R, bm.Rtip]
+    f = np.r_[0.0, Np, 0.0]
+    M = np.zeros(len(r))
+    for i in range(len(r) - 1):
+        x = r[i:]
+        g = f[i:] * (x - r[i])
+        M[i] = np.sum(0.5 * (g[1:] + g[:-1]) * np.diff(x))
+    return M[0], M[1:-1]                 # root moment, moments at the 17 stations
+
+
+def raw_deflection(M_st, ei_rel):
+    """Tip deflection of a cantilever blade, in arbitrary units (EI relative)."""
+    x = bm.R - bm.Rhub
+    L = bm.Rtip - bm.Rhub
+    g = (L - x) * M_st / ei_rel
+    return np.sum(0.5 * (g[1:] + g[:-1]) * np.diff(x))
+
+
+def make_reference(af):
+    """Root moment and raw deflection of the NREL 5 MW blade, used for normalising."""
+    rotor = bm.build_rotor(bm.CHORD_REF, bm.THETA_REF, af, n_sector=N_SECTOR_FAST)
+    M_root, M_st = flap_moments(rotor)
+    return {"M_root": M_root, "defl": raw_deflection(M_st, np.ones(len(bm.R)))}
+
+
+def evaluate_blade(c_chord, c_twist, af, A, k, ref=None, n_sector=N_SECTOR_FAST):
+    """The 'judge': 12 control-point numbers + site -> AEP, mass, loads, deflection."""
     chord = bm.spline_values(np.asarray(c_chord))
     twist = bm.spline_values(np.asarray(c_twist))
     rotor = bm.build_rotor(chord, twist, af, n_sector=n_sector)
     p = fast_power_curve(rotor)
     aep = aep_gwh(p, A, k)
-    return {"aep_gwh": aep, "cf": capacity_factor(aep), "mass": mass_index(chord)}
+    out = {"aep_gwh": aep, "cf": capacity_factor(aep), "mass": mass_index(chord)}
+    if ref is not None:
+        M_root, M_st = flap_moments(rotor)
+        ei_rel = (chord / bm.CHORD_REF) ** 4
+        out["moment"] = M_root / ref["M_root"]
+        out["defl"] = raw_deflection(M_st, ei_rel) / ref["defl"]
+    return out
