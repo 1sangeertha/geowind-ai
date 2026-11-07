@@ -12,11 +12,11 @@ body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 "Segoe UI",sys
 header{padding:18px 24px 10px}
 h1{margin:0;font:600 26px Georgia,serif}
 .note{margin:8px 0 0;padding:8px 12px;background:var(--warnbg);color:var(--warn);border-radius:6px;font-size:13px;max-width:900px}
-main{display:grid;grid-template-columns:minmax(300px,420px) 1fr;gap:16px;padding:8px 24px 24px}
+main{display:grid;grid-template-columns:minmax(340px,540px)fr;gap:16px;padding:8px 24px 24px}
 @media(max-width:850px){main{grid-template-columns:1fr}}
 section{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px}
 h2{margin:0 0 8px;font-size:15px;font-weight:600}
-#map{height:230px;border-radius:6px;border:1px solid var(--line);background:#dfe8ec}
+#map{height: 420px;border-radius:6px;border:1px solid var(--line);background:#dfe8ec}
 select{width:100%;padding:6px;margin-top:8px;font:inherit}
 .stat{display:flex;gap:16px;flex-wrap:wrap;margin-top:8px;color:var(--mute);font-size:13px}
 .stat b{color:var(--ink)}
@@ -62,7 +62,10 @@ tr.sel{background:#dff0f2!important;font-weight:600}
 <div class="tools">
 <label><input type="checkbox" id="spin" checked> Spin rotor</label>
 <label><input type="checkbox" id="ghost" checked> Show NREL outline</label>
-<span>Drag to rotate the view. Blade section shapes are simplified for display.</span>
+<button id="zin" type="button">+</button>
+<button id="zout" type="button">&minus;</button>
+<button id="reset" type="button">Reset view</button>
+<span>Drag to rotate, scroll or use + / - to zoom.. Blade section shapes are simplified for display.</span>
 </div>
 </section>
 </main>
@@ -167,6 +170,11 @@ function initThree(){
     drag = [e.clientX, e.clientY];
   });
   addEventListener("resize", ()=>{ cam.aspect = el.clientWidth/el.clientHeight; cam.updateProjectionMatrix(); ren.setSize(el.clientWidth, el.clientHeight); });
+  const zoom = f => { cam.position.z = Math.min(25, Math.max(2.5, cam.position.z*f)); };
+  ren.domElement.addEventListener("wheel", e => { e.preventDefault(); zoom(e.deltaY > 0 ? 1.1 : 0.9); }, {passive:false});
+  $("zin").onclick = () => zoom(0.8);
+  $("zout").onclick = () => zoom(1.25);
+  $("reset").onclick = () => { cam.position.z = 10; scene.rotation.set(0,0,0); };
   (function loop(){
     requestAnimationFrame(loop);
     if($("spin").checked) rotor.rotation.z -= 0.006;
