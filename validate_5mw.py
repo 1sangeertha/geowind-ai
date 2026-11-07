@@ -25,7 +25,7 @@ rho, mu = 1.225, 1.81206e-5
 shearExp, hubHt = 0.2, 90.0
 
 # ---------------- Airfoil data from the original WISDEM yaml ----------------
-yaml_path = Path(r"C:\GeoWind\WISDEM-master\examples\02_reference_turbines\nrel5mw.yaml")
+yaml_path = Path(__file__).resolve().parent / "WISDEM-master" / "examples" / "02_reference_turbines" / "nrel5mw.yaml"
 print("Loading:", yaml_path)
 data = load_geometry_yaml(str(yaml_path))
 af_data = data["airfoils"]
@@ -129,8 +129,9 @@ if ref_path.exists():
     mine = np.interp(ref_ws, U_all, P_elec / 1e3)
     mask = ref_p > 100
     err = 100 * (mine[mask] - ref_p[mask]) / ref_p[mask]
-    print(f"Vs reference: mean |error| = {np.mean(np.abs(err)):.1f}%, "
-          f"max |error| = {np.max(np.abs(err)):.1f}%")
+    print(f"Vs reference: mean |error| = {np.mean(np.abs(err)):.1f}%, "f"max |error| = {np.max(np.abs(err)):.1f}%")
+    k = np.argmax(np.abs(err))
+    print(f"Max error at {ref_ws[mask][k]:.1f} m/s: ours {mine[mask][k]:.0f} kW vs reference {ref_p[mask][k]:.0f} kW")    
 
     fig2 = plt.figure()
     plt.plot(ref_ws, ref_p, "k-", label="NREL reference")

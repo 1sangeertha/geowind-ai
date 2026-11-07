@@ -9,7 +9,7 @@ from wisdem.inputs.validation import load_geometry_yaml
 from wisdem.ccblade.ccblade import CCBlade, CCAirfoil
 
 # ---------- NREL 5 MW reference blade ----------
-YAML_PATH = Path(r"C:\GeoWind\WISDEM-master\examples\02_reference_turbines\nrel5mw.yaml")
+YAML_PATH = Path(__file__).resolve().parent / "WISDEM-master" / "examples" / "02_reference_turbines" / "nrel5mw.yaml"
 Rhub, Rtip = 1.5, 63.0
 R = np.array([2.8667, 5.6000, 8.3333, 11.7500, 15.8500, 19.9500, 24.0500,
               28.1500, 32.2500, 36.3500, 40.4500, 44.5500, 48.6500, 52.7500,
