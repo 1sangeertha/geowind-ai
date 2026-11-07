@@ -24,8 +24,8 @@ for c, col, lab in ((bm.spline_values(c_old, s), "k", "NREL 5 MW"),
     ax[1].plot(r, c, color=col, label=lab)
 ax[2].plot(r, bm.spline_values(t_old, s), "k", label="NREL 5 MW")
 ax[2].plot(r, bm.spline_values(t_new, s), "tab:blue", label="Optimised (lighter)")
-ax[0].set_title("Blade planform (top view)")
-ax[0].set_xlabel("Radius (m)"); ax[0].set_aspect("equal")
+ax[0].set_title("Blade planform (width exaggerated)")
+ax[0].set_xlabel("Radius (m)");
 ax[1].set_title("Chord"); ax[1].set_xlabel("Radius (m)"); ax[1].set_ylabel("m")
 ax[2].set_title("Twist"); ax[2].set_xlabel("Radius (m)"); ax[2].set_ylabel("deg")
 for a in ax:

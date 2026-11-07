@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GeoWind AI - Phase 1 prototype</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+:root{--bg:#edf1f3;--panel:#fff;--ink:#12232e;--mute:#5a6b76;--line:#d3dde2;--teal:#0e7c86;--warn:#9a5b00;--warnbg:#fff4de}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 "Segoe UI",system-ui,sans-serif}
+header{padding:18px 24px 10px}
+h1{margin:0;font:600 26px Georgia,serif}
+.note{margin:8px 0 0;padding:8px 12px;background:var(--warnbg);color:var(--warn);border-radius:6px;font-size:13px;max-width:900px}
+main{display:grid;grid-template-columns:minmax(300px,420px) 1fr;gap:16px;padding:8px 24px 24px}
+@media(max-width:850px){main{grid-template-columns:1fr}}
+section{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px}
+h2{margin:0 0 8px;font-size:15px;font-weight:600}
+#map{height:230px;border-radius:6px;border:1px solid var(--line);background:#dfe8ec}
+select{width:100%;padding:6px;margin-top:8px;font:inherit}
+.stat{display:flex;gap:16px;flex-wrap:wrap;margin-top:8px;color:var(--mute);font-size:13px}
+.stat b{color:var(--ink)}
+input[type=range]{width:100%;accent-color:var(--teal)}
+.ends{display:flex;justify-content:space-between;font-size:12px;color:var(--mute)}
+table{width:100%;border-collapse:collapse;font-size:13px;margin-top:6px}
+th,td{padding:5px 6px;text-align:right;border-bottom:1px solid var(--line)}
+th:first-child,td:first-child{text-align:left}
+tbody tr{cursor:pointer}tbody tr:hover{background:#f1f6f8}
+tr.sel{background:#dff0f2!important;font-weight:600}
+#view{height:520px;position:relative;border-radius:6px;background:linear-gradient(#f9fbfc,#dbe5ea);overflow:hidden;touch-action:none}
+#view canvas{display:block}
+#msg{padding:20px;color:var(--mute)}
+.tools{display:flex;gap:16px;margin-top:8px;font-size:13px;color:var(--mute)}
+#why{margin:10px 0 0;font-size:14px}
+.right{display:flex;flex-direction:column;gap:16px}
+</style>
+</head>
+<body>
+<header>
+<h1>GeoWind AI: site-based blade designs</h1>
+<p class="note">Prototype. These are precomputed NSGA-II results from a rigid-blade BEM model (CCBlade) with proxy mass and stiffness measures. Screening level only, not live, not CFD, and the wind values are long-term atlas averages.</p>
+</header>
+<main>
+<div class="right">
+<section>
+<h2>1. Pick a site</h2>
+<div id="map"></div>
+<select id="siteSel" aria-label="Site"></select>
+<div class="stat" id="siteInfo"></div>
+</section>
+<section>
+<h2>2. Set your priority</h2>
+<input type="range" id="w" min="0" max="100" value="60" aria-label="Priority between energy and blade mass">
+<div class="ends"><span>Lighter blade</span><span>More energy</span></div>
+<table><thead><tr><th>Rank</th><th>AEP (GWh)</th><th>vs NREL</th><th>Mass index</th></tr></thead><tbody id="rows"></tbody></table>
+<p id="why"></p>
+</section>
+</div>
+<section>
+<h2>3. Selected blade (grey outline: NREL 5 MW)</h2>
+<div id="view"><div id="msg">Loading 3D view...</div></div>
+<div class="tools">
+<label><input type="checkbox" id="spin" checked> Spin rotor</label>
+<label><input type="checkbox" id="ghost" checked> Show NREL outline</label>
+<span>Drag to rotate the view. Blade section shapes are simplified for display.</span>
+</div>
+</section>
+</main>
+<script src="designs.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const TC = [1,1,1,.40,.35,.35,.30,.25,.25,.21,.21,.18,.18,.18,.18,.18,.18]; // thickness/chord at stations
+let si = 0, ranked = [], pick = 0;
+
+function topsis(ds, w){
+  const na = Math.hypot(...ds.map(d=>d.aep)), nm = Math.hypot(...ds.map(d=>d.mass));
+  const a = ds.map(d=>w*d.aep/na), m = ds.map(d=>(1-w)*d.mass/nm);
+  const aB = Math.max(...a), aW = Math.min(...a), mB = Math.min(...m), mW = Math.max(...m);
+  return ds.map((d,i)=>{
+    const dp = Math.hypot(a[i]-aB, m[i]-mB), dn = Math.hypot(a[i]-aW, m[i]-mW);
+    return {i, c: dn/((dp+dn)||1)};
+  }).sort((x,y)=>y.c-x.c);
+}
+const avg = (arr, ids) => ids.reduce((t,i)=>t+arr[i],0)/ids.length;
+const where = f => DATA.r_m.map((r,i)=>f(r)?i:-1).filter(i=>i>=0);
+
+function explain(d, s){
+  const gain = 100*(d.aep/s.nrel_aep-1);
+  const cr = 100*(avg(d.chord,where(r=>r>40))/avg(DATA.nrel.chord,where(r=>r>40))-1);
+  const dt = avg(d.twist,where(r=>r<30))-avg(DATA.nrel.twist,where(r=>r<30));
+  return `At ${s.name} this design yields ${gain>=0?'+':''}${gain.toFixed(2)}% annual energy against the NREL blade, with a ${Math.abs(100*(d.mass-1)).toFixed(0)}% ${d.mass<1?'lower':'higher'} mass index. Beyond 40 m radius its chord is ${Math.abs(cr).toFixed(0)}% ${cr<0?'narrower':'wider'}, and inner twist is ${Math.abs(dt).toFixed(1)} degrees ${dt<0?'lower':'higher'}. Tip deflection is held at or below the NREL blade's.`;
+}
+
+function refresh(keepPick){
+  const s = DATA.sites[si], w = $("w").value/100;
+  ranked = topsis(s.designs, w);
+  if(!keepPick) pick = 0;
+  const cf = 100*s.nrel_aep*1e6/(5000*8760);
+  $("siteInfo").innerHTML = `<span>Weibull A <b>${s.A}</b> m/s</span><span>k <b>${s.k}</b></span><span>NREL blade capacity factor <b>${cf.toFixed(0)}%</b></span>` +
+    (cf<10 ? `<span style="color:var(--warn)">Very low wind: not viable for this turbine.</span>` : "");
+  $("rows").innerHTML = ranked.slice(0,6).map((r,k)=>{
+    const d = s.designs[r.i];
+    return `<tr data-k="${k}" class="${k===pick?'sel':''}"><td>${k+1}</td><td>${d.aep.toFixed(3)}</td><td>${(100*(d.aep/s.nrel_aep-1)).toFixed(2)}%</td><td>${d.mass.toFixed(2)}</td></tr>`;
+  }).join("");
+  document.querySelectorAll("#rows tr").forEach(tr=>tr.onclick=()=>{pick=+tr.dataset.k;refresh(true);});
+  const d = s.designs[ranked[pick].i];
+  $("why").textContent = explain(d, s);
+  drawBlade(d);
+}
+
+/* ---------- 3D ---------- */
+let scene, cam, ren, rotor, bladeMesh, ghostMesh, drag = null;
+function bladeGeo(chord, twist){
+  const rs = DATA.r_m, NS = 48, NC = 20, S = 0.05, pos = [], idx = [];
+  const at = (arr, r) => {
+    if(r <= rs[0]) return arr[0];
+    if(r >= rs[rs.length-1]) return arr[arr.length-1];
+    let i = 1; while(rs[i] < r) i++;
+    const t = (r-rs[i-1])/(rs[i]-rs[i-1]);
+    return arr[i-1]*(1-t)+arr[i]*t;
+  };
+  const xs = Array.from({length:NC},(_,i)=>(1-Math.cos(Math.PI*i/(NC-1)))/2);
+  const yt = (x,t)=>5*t*(0.2969*Math.sqrt(x)-0.126*x-0.3516*x*x+0.2843*x**3-0.1036*x**4);
+  for(let k=0;k<=NS;k++){
+    const r = DATA.rhub+(DATA.rtip-DATA.rhub)*k/NS;
+    const c = at(chord,r), th = at(twist,r)*Math.PI/180, tc = at(TC,r);
+    const ring = [];
+    for(let i=0;i<NC;i++) ring.push([xs[i], yt(xs[i],tc)]);
+    for(let i=NC-2;i>=1;i--) ring.push([xs[i], -yt(xs[i],tc)]);
+    for(const [x,y] of ring){
+      const u = (x-0.3)*c, v = y*c;
+      pos.push(u*Math.cos(th)-v*Math.sin(th), r*S, u*Math.sin(th)+v*Math.cos(th));
+    }
+    if(k===0) var M = ring.length;
+  }
+  for(let k=0;k<NS;k++) for(let j=0;j<M;j++){
+    const a=k*M+j, b=k*M+(j+1)%M, c=(k+1)*M+j, d=(k+1)*M+(j+1)%M;
+    idx.push(a,c,b,b,c,d);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(pos,3));
+  g.setIndex(idx); g.computeVertexNormals();
+  return g;
+}
+function initThree(){
+  if(typeof THREE === "undefined"){ $("msg").textContent = "The 3D library could not load (needs internet access to cdnjs). The table and ranking still work."; return false; }
+  const el = $("view"); el.innerHTML = "";
+  scene = new THREE.Scene();
+  cam = new THREE.PerspectiveCamera(45, el.clientWidth/el.clientHeight, 0.1, 100);
+  cam.position.set(0,0,10);
+  ren = new THREE.WebGLRenderer({antialias:true, alpha:true});
+  ren.setPixelRatio(devicePixelRatio); ren.setSize(el.clientWidth, el.clientHeight);
+  el.appendChild(ren.domElement);
+  scene.add(new THREE.AmbientLight(0xffffff,0.55));
+  const L = new THREE.DirectionalLight(0xffffff,0.9); L.position.set(3,5,8); scene.add(L);
+  rotor = new THREE.Group(); scene.add(rotor);
+  const hub = new THREE.Mesh(new THREE.SphereGeometry(0.2,24,16), new THREE.MeshStandardMaterial({color:0x8a98a1}));
+  scene.add(hub);
+  ren.domElement.onpointerdown = e => drag = [e.clientX, e.clientY];
+  addEventListener("pointerup", ()=>drag=null);
+  addEventListener("pointermove", e=>{
+    if(!drag) return;
+    scene.rotation.y += (e.clientX-drag[0])*0.008; scene.rotation.x += (e.clientY-drag[1])*0.008;
+    drag = [e.clientX, e.clientY];
+  });
+  addEventListener("resize", ()=>{ cam.aspect = el.clientWidth/el.clientHeight; cam.updateProjectionMatrix(); ren.setSize(el.clientWidth, el.clientHeight); });
+  (function loop(){
+    requestAnimationFrame(loop);
+    if($("spin").checked) rotor.rotation.z -= 0.006;
+    ren.render(scene, cam);
+  })();
+  return true;
+}
+let threeOK = false;
+function drawBlade(d){
+  if(!threeOK) return;
+  while(rotor.children.length) rotor.remove(rotor.children[0]);
+  const mat = new THREE.MeshStandardMaterial({color:0x0e7c86, roughness:0.45, side:THREE.DoubleSide});
+  const g = bladeGeo(d.chord, d.twist);
+  for(let b=0;b<3;b++){
+    const m = new THREE.Mesh(g, mat); m.rotation.z = b*2*Math.PI/3; rotor.add(m);
+  }
+  if($("ghost").checked){
+    const gm = new THREE.Mesh(bladeGeo(DATA.nrel.chord, DATA.nrel.twist),
+      new THREE.MeshBasicMaterial({color:0x56646d, wireframe:true, transparent:true, opacity:0.35}));
+    rotor.add(gm);
+  }
+}
+
+/* ---------- start ---------- */
+if(typeof DATA === "undefined"){
+  document.body.insertAdjacentHTML("afterbegin", "<p class='note'>designs.js not found. Create it next to this file (see instructions).</p>");
+} else {
+  DATA.sites.forEach((s,i)=>$("siteSel").add(new Option(s.name, i)));
+  $("siteSel").onchange = e => { si = +e.target.value; refresh(false); };
+  $("w").oninput = () => refresh(false);
+  $("ghost").onchange = () => refresh(true);
+  if(typeof L !== "undefined"){
+    const map = L.map("map").setView([21,78],4);
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {attribution:"&copy; OpenStreetMap contributors", maxZoom:12}).addTo(map);
+    DATA.sites.forEach((s,i)=>L.circleMarker([s.lat,s.lon],{radius:8,color:"#0e7c86",fillOpacity:0.8})
+      .addTo(map).bindTooltip(s.name).on("click",()=>{ si=i; $("siteSel").value=i; refresh(false); }));
+  } else { $("map").textContent = "Map library not loaded (needs internet). Use the site list below."; }
+  threeOK = initThree();
+  refresh(false);
+}
+</script>
+</body>
+</html>
