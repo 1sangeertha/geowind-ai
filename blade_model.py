@@ -72,9 +72,9 @@ def spline_values(c, s=S):
 
 
 # ---------- CCBlade ----------
-def build_rotor(chord, theta, af):
+def build_rotor(chord, theta, af, n_sector=N_SECTOR):
     return CCBlade(R, chord, theta, af, Rhub, Rtip, B, RHO, MU,
-                   PRECONE, TILT, YAW, SHEAR_EXP, HUB_HT, N_SECTOR)
+                   PRECONE, TILT, YAW, SHEAR_EXP, HUB_HT, n_sector)
 
 
 def _power(rotor, U, omega, pitch):
