@@ -132,7 +132,7 @@ function bladeGeo(chord, twist){
     for(let i=NC-2;i>=1;i--) ring.push([xs[i], -yt(xs[i],tc)]);
     for(const [x,y] of ring){
       const u = (x-0.3)*c, v = y*c;
-      pos.push(u*Math.cos(th)-v*Math.sin(th), r*S, u*Math.sin(th)+v*Math.cos(th));
+      pos.push((u*Math.cos(th)-v*Math.sin(th))*S, r*S, (u*Math.sin(th)+v*Math.cos(th))*S);
     }
     if(k===0) var M = ring.length;
   }
@@ -200,7 +200,7 @@ if(typeof DATA === "undefined"){
   $("ghost").onchange = () => refresh(true);
   if(typeof L !== "undefined"){
     const map = L.map("map").setView([21,78],4);
-    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {attribution:"&copy; OpenStreetMap contributors", maxZoom:12}).addTo(map);
+    L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {attribution:"&copy; OpenStreetMap contributors &copy; CARTO", subdomains:"abcd", maxZoom:12}).addTo(map);
     DATA.sites.forEach((s,i)=>L.circleMarker([s.lat,s.lon],{radius:8,color:"#0e7c86",fillOpacity:0.8})
       .addTo(map).bindTooltip(s.name).on("click",()=>{ si=i; $("siteSel").value=i; refresh(false); }));
   } else { $("map").textContent = "Map library not loaded (needs internet). Use the site list below."; }
