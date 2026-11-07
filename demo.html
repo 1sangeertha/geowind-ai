@@ -200,7 +200,7 @@ if(typeof DATA === "undefined"){
   $("ghost").onchange = () => refresh(true);
   if(typeof L !== "undefined"){
     const map = L.map("map").setView([21,78],4);
-    L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {attribution:"&copy; OpenStreetMap contributors &copy; CARTO", subdomains:"abcd", maxZoom:12}).addTo(map);
+    L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}", {attribution:"Tiles &copy; Esri", maxZoom:12}).addTo(map);
     DATA.sites.forEach((s,i)=>L.circleMarker([s.lat,s.lon],{radius:8,color:"#0e7c86",fillOpacity:0.8})
       .addTo(map).bindTooltip(s.name).on("click",()=>{ si=i; $("siteSel").value=i; refresh(false); }));
   } else { $("map").textContent = "Map library not loaded (needs internet). Use the site list below."; }
