@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GeoWind AI — Aerodynamic Blade Synthesis Studio</title>
+
+  <!-- External CDN Libraries (Zero Build Step) -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+  
+  <!-- Bespoke Aero Sky Visual Design System -->
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- Top Navigation & Engineering Specification Banner -->
+  <header class="app-header">
+    <div class="header-top">
+      <div class="brand-group">
+        <div class="brand-icon" aria-hidden="true">
+          <!-- Aerodynamic Vortex SVG Mark -->
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9.59 4.59A2 2 0 1 1 11 8H2m10.59 11.41A2 2 0 1 0 14 16H2m15.73-8.27A2.5 2.5 0 1 1 19.5 12H2"/>
+          </svg>
+        </div>
+        <div class="brand-title">
+          <h1>
+            GeoWind AI
+            <span class="brand-badge">Blade Synthesis</span>
+          </h1>
+          <p class="brand-subtitle">Site-Specific Aerodynamic Optimization &amp; NSGA-II Pareto Screening</p>
+        </div>
+      </div>
+
+      <div class="header-meta">
+        <div class="spec-badge">
+          <span class="dot"></span>
+          <span>Turbine: NREL 5 MW Baseline (R = 63.0 m)</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Prominent Screening-Level Disclaimer (Hard Requirement) -->
+    <div class="disclaimer-banner" role="note">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2" style="flex-shrink:0;">
+        <circle cx="12" cy="12" r="10"></circle>
+        <line x1="12" y1="8" x2="12" y2="12"></line>
+        <line x1="12" y1="16" x2="12.01" y2="16"></line>
+      </svg>
+      <span>
+        <strong>Engineering Screening Disclaimer:</strong> These are precomputed NSGA-II Pareto frontier results from a rigid-blade BEM model (CCBlade) with proxy mass and stiffness measures. Screening level only, not live, not CFD. Wind values represent long-term atlas Weibull averages.
+      </span>
+    </div>
+  </header>
+
+  <!-- Global Error Notification Box (if designs.js fails to load) -->
+  <div id="appGlobalError" class="disclaimer-banner hidden" style="margin: 16px 28px; background: rgba(244,63,94,0.15); border-color: #f43f5e; color: #fecdd3;" role="alert"></div>
+
+  <!-- Main Application Two-Column Layout -->
+  <main class="app-layout">
+
+    <!-- ====================================================================
+         LEFT COLUMN: Scrolling Controls & Telemetry Data
+         ==================================================================== -->
+    <div class="controls-column">
+
+      <!-- Section 1: Geographic Site Selection -->
+      <section class="panel-card" aria-labelledby="headingSitePick">
+        <div class="panel-header">
+          <div class="panel-title-wrap">
+            <span class="step-indicator">STEP 01</span>
+            <div>
+              <h2 id="headingSitePick" class="panel-title">Wind Resource &amp; Site Regime</h2>
+              <div class="panel-subtitle">Select an Indian installation location</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Interactive Leaflet Map with Esri World Street Map Tiles -->
+        <div id="mapView" role="region" aria-label="Interactive map of Indian wind sites"></div>
+
+        <!-- 6 Interactive Site Cards with Capacity Factor Badges -->
+        <div id="siteCardList" class="site-chips-grid" role="group" aria-label="Wind site selection buttons">
+          <!-- Populated dynamically by app.js -->
+        </div>
+
+        <!-- Site Climate Telemetry Card -->
+        <div class="climate-telemetry-box">
+          <div class="climate-telemetry-header">
+            <span>Atmospheric Telemetry</span>
+            <span id="climateSiteName" style="color: var(--aero-blue); font-weight:600;">Loading site...</span>
+          </div>
+          <div class="climate-metrics-row">
+            <div class="climate-metric-item">
+              <span class="climate-metric-label">Weibull Scale A</span>
+              <span class="climate-metric-val" id="climateWeibullA">--</span>
+            </div>
+            <div class="climate-metric-item">
+              <span class="climate-metric-label">Shape Param k</span>
+              <span class="climate-metric-val" id="climateWeibullK">--</span>
+            </div>
+            <div class="climate-metric-item">
+              <span class="climate-metric-label">Baseline NREL CF</span>
+              <span class="climate-metric-val" id="climateNrelCf">--</span>
+            </div>
+          </div>
+          <div id="climateViabilityBanner" class="hidden"></div>
+        </div>
+      </section>
+
+      <!-- Section 2: Multi-Objective Priority Slider & Ranked Designs -->
+      <section class="panel-card" aria-labelledby="headingPriority">
+        <div class="panel-header">
+          <div class="panel-title-wrap">
+            <span class="step-indicator">STEP 02</span>
+            <div>
+              <h2 id="headingPriority" class="panel-title">Multi-Objective Optimization (TOPSIS)</h2>
+              <div class="panel-subtitle">Balance blade structural mass against energy yield</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Priority Weight Range Slider -->
+        <div class="slider-wrapper">
+          <div class="slider-labels-row">
+            <span class="slider-label-mass" id="priorityMassPct">40% Mass Focus</span>
+            <span class="slider-label-energy" id="priorityEnergyPct">60% Energy Focus</span>
+          </div>
+          <input
+            type="range"
+            id="prioritySlider"
+            class="aero-range"
+            min="0"
+            max="100"
+            value="60"
+            aria-label="Optimization priority weight between blade structural mass and annual energy production"
+          />
+        </div>
+
+        <!-- Preset Quick Selectors -->
+        <div class="priority-presets">
+          <button type="button" class="priority-preset-btn" data-preset="20">Lightweight (20%)</button>
+          <button type="button" class="priority-preset-btn active" data-preset="60">Balanced (60%)</button>
+          <button type="button" class="priority-preset-btn" data-preset="90">Max Energy (90%)</button>
+        </div>
+
+        <!-- Ranked Pareto Designs Leaderboard Table -->
+        <div class="table-scroll-container">
+          <table class="leaderboard-table" aria-label="Ranked blade designs based on TOPSIS criteria">
+            <thead>
+              <tr>
+                <th scope="col">Rank</th>
+                <th scope="col">AEP</th>
+                <th scope="col">vs NREL</th>
+                <th scope="col">Mass Index</th>
+                <th scope="col">Score</th>
+              </tr>
+            </thead>
+            <tbody id="leaderboardRows">
+              <!-- Populated dynamically by app.js -->
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Section 3: Live Telemetry Metric Tiles -->
+      <section class="metrics-tiles-grid" aria-label="Key aerodynamic and structural metrics">
+        <!-- Tile 1: Annual Energy -->
+        <div class="metric-tile">
+          <span class="metric-tile-label">Annual Energy Yield</span>
+          <div class="metric-tile-value">
+            <span id="metricAepValue">--</span>
+            <span class="metric-unit">GWh</span>
+          </div>
+          <div class="metric-tile-footer">
+            <span id="metricAepBaseline">vs -- GWh NREL</span>
+          </div>
+        </div>
+
+        <!-- Tile 2: Energy Yield Delta % -->
+        <div class="metric-tile">
+          <span class="metric-tile-label">Energy vs NREL Baseline</span>
+          <div class="metric-tile-value">
+            <span id="metricAepDeltaBadge" class="metric-badge badge-gain">--%</span>
+          </div>
+          <div class="metric-tile-footer">
+            <span id="metricAepDeltaDesc">Energy variance</span>
+          </div>
+        </div>
+
+        <!-- Tile 3: Blade Structural Mass Index -->
+        <div class="metric-tile">
+          <span class="metric-tile-label">Structural Mass Index</span>
+          <div class="metric-tile-value">
+            <span id="metricMassValue">--</span>
+          </div>
+          <div class="metric-tile-footer">
+            <span id="metricMassDeltaBadge" class="metric-badge badge-light">--</span>
+            <span id="metricMassDesc" class="metric-subtext">Baseline = 1.00</span>
+          </div>
+        </div>
+
+        <!-- Tile 4: Turbine Capacity Factor -->
+        <div class="metric-tile">
+          <span class="metric-tile-label">NREL Baseline Capacity Factor</span>
+          <div class="metric-tile-value">
+            <span id="metricCfValue">--%</span>
+          </div>
+          <div class="metric-tile-footer">
+            <span id="metricCfDesc">Screening metric</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Section 4: Dual Profile Charts (Chord & Twist) -->
+      <section class="charts-row-grid" aria-label="Spanwise aerodynamic chord and twist profiles">
+        <!-- Chord Distribution SVG Chart -->
+        <div class="chart-card" id="chordChartContainer">
+          <!-- Populated by BladeCharts in charts.js -->
+        </div>
+
+        <!-- Twist Distribution SVG Chart -->
+        <div class="chart-card" id="twistChartContainer">
+          <!-- Populated by BladeCharts in charts.js -->
+        </div>
+      </section>
+
+      <!-- Section 5: Plain-Language Engineering Rationale -->
+      <section class="explanation-card" aria-label="Aerodynamic synthesis rationale">
+        <div class="explanation-icon" aria-hidden="true">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+            <line x1="16" y1="13" x2="8" y2="13"></line>
+            <line x1="16" y1="17" x2="8" y2="17"></line>
+            <polyline points="10 9 9 9 8 9"></polyline>
+          </svg>
+        </div>
+        <div class="explanation-content">
+          <h4>Aerodynamic Synthesis Rationale</h4>
+          <p id="whyExplanation">Analyzing selected Pareto design parameters...</p>
+        </div>
+      </section>
+
+    </div>
+
+    <!-- ====================================================================
+         RIGHT COLUMN: Sticky 3D Rotor Aerodynamic Stage
+         ==================================================================== -->
+    <div class="stage-column">
+      <section class="panel-card stage-panel" aria-labelledby="heading3dStage">
+        <div class="panel-header stage-header">
+          <div class="panel-title-wrap">
+            <span class="step-indicator">STAGE</span>
+            <div>
+              <h2 id="heading3dStage" class="panel-title">3D Rotor Aerodynamic Stage</h2>
+              <div class="panel-subtitle">Real-time geometry morphing &amp; orange NREL 5 MW baseline wireframe</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3D Canvas Stage Viewport (Fills Stage Column) -->
+        <div id="view3dStage" class="stage-container" role="img" aria-label="Interactive 3D wind turbine rotor and morphing blade viewer">
+          <!-- In-Stage Floating Top HUD -->
+          <div class="stage-hud-overlay">
+            <div class="stage-pill">
+              <span class="stage-pill-dot"></span>
+              <span>R = 63.0 m &bull; Rotor &Oslash; 126 m</span>
+            </div>
+
+            <div class="hud-views-group" role="group" aria-label="3D Camera Viewpoint Presets">
+              <button type="button" class="view-preset-btn active" data-view="iso">Isometric</button>
+              <button type="button" class="view-preset-btn" data-view="front">Rotor Face</button>
+              <button type="button" class="view-preset-btn" data-view="pitch">Side Pitch</button>
+              <button type="button" class="view-preset-btn" data-view="tip">Tip Washout</button>
+            </div>
+          </div>
+
+          <!-- Bottom Telemetry HUD Corner -->
+          <div class="stage-telemetry-corner">
+            <div class="hud-rotor-stat">
+              Rotor Spin: <b id="rotorRpmDisplay">9.4 RPM</b>
+            </div>
+          </div>
+        </div>
+
+        <!-- Stage Controls Bar: Wind Speed Slider, Spin Toggle, Wireframe, Zoom -->
+        <div class="stage-controls-bar">
+          <div class="wind-slider-group">
+            <span class="wind-label-badge">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M17.7 7.7A7.5 7.5 0 1 0 5 14h14a4 4 0 0 0 0-8h-.3"></path>
+              </svg>
+              Wind Speed:
+            </span>
+            <input
+              type="range"
+              id="windSlider"
+              class="aero-range"
+              min="1"
+              max="25"
+              step="0.5"
+              value="8.5"
+              aria-label="Wind speed in meters per second"
+            />
+            <span id="windSpeedVal" class="wind-speed-readout">8.5 m/s</span>
+          </div>
+          <p class="wind-slider-note">Animation speed only. It does not change the energy results.</p>
+
+          <div class="stage-btn-group">
+            <button type="button" id="spinToggleBtn" class="toggle-spin-btn active" aria-pressed="true">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"></circle>
+                <polygon points="10 8 16 12 10 16 10 8"></polygon>
+              </svg>
+              <span id="spinToggleText">Spinning</span>
+            </button>
+
+            <label class="wireframe-checkbox-label">
+              <input type="checkbox" id="ghostToggle" checked />
+              <span>NREL Wireframe</span>
+            </label>
+
+            <button type="button" id="zoomInBtn" class="zoom-btn" title="Zoom In (+)" aria-label="Zoom in">+</button>
+            <button type="button" id="zoomOutBtn" class="zoom-btn" title="Zoom Out (-)" aria-label="Zoom out">&minus;</button>
+            <button type="button" id="resetViewBtn" class="zoom-btn" title="Reset Viewport" aria-label="Reset 3D camera" style="width: auto; padding: 0 8px; font-size: 11px;">Reset</button>
+          </div>
+        </div>
+      </section>
+    </div>
+
+  </main>
+
+  <!-- Technical Footer -->
+  <footer class="app-footer">
+    <div class="footer-copy">
+      <strong>GeoWind AI Aerodynamic Studio</strong> &bull; Phase 1 Interactive Evaluation System &bull; Openable via double-click or local server.
+    </div>
+    <div class="footer-tags">
+      <span class="footer-tag">BEM CCBlade</span>
+      <span class="footer-tag">NSGA-II Pareto</span>
+      <span class="footer-tag">NREL 5 MW (R=63m)</span>
+      <span class="footer-tag">TOPSIS Ranking</span>
+    </div>
+  </footer>
+
+  <!-- ====================================================================
+       SCRIPTS: Data Contract, CDN Libraries, and Modular App Scripts
+       ==================================================================== -->
+  <!-- 1. Data Contract: reads designs.js (checks parent folder then current folder) -->
+  <script src="../designs.js"></script>
+  <script>
+    if (typeof DATA === 'undefined') {
+      document.write('<script src="designs.js"><\/script>');
+    }
+  </script>
+
+  <!-- 2. Leaflet Map Library (Esri tiles compliant) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+
+  <!-- 3. Three.js r128 Library (3D Blade & Atmospheric Stage) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+  <!-- 4. Isolated Data Access Layer -->
+  <script src="data.js"></script>
+
+  <!-- 5. 3D Blade Stage with Smooth Geometry Morphing -->
+  <script src="viewer3d.js"></script>
+
+  <!-- 6. Vector SVG Profile Charts -->
+  <script src="charts.js"></script>
+
+  <!-- 7. Main Application Orchestrator -->
+  <script src="app.js"></script>
+
+</body>
+</html>
