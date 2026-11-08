@@ -46,6 +46,8 @@ Run scripts from the project folder, for example `python validate_5mw.py`.
 ```
 python -c "import json; open('designs.js','w').write('const DATA=' + open('designs.json').read() + ';')"
 ```
+- `frontend/index.html`: the main demo page (sticky 3D stage, TOPSIS ranking, charts). Open it by double-click. It reads `../designs.js`.
+- `demo.html`: simpler single-file fallback version of the same demo.
 
 ## Results so far (all within our model)
 
